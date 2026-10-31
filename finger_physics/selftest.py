@@ -21,3 +21,15 @@ def synthetic_hand(t, size):
             p[j + 1 : b + 4] = p[j] + rotate(p[j + 1 : b + 4] - p[j], k, bend)
     p *= 1.6 * s
     return p + [W * (0.5 + 0.25 * np.sin(t * 0.9)), H * 0.8, 0]
+
+
+def synthetic_pair(t, size):
+    """Two hands that clap together roughly once a second."""
+    W, H = size
+    a = synthetic_hand(t, size)
+    b = a.copy()
+    b[:, 0] = 2 * a[0, 0] - a[:, 0]  # mirror image about its own wrist
+    gap = W * (0.08 + 0.12 * (1 + np.sin(t * 6.0)))  # oscillates into contact
+    a[:, 0] += W * 0.5 - a[0, 0] - gap
+    b[:, 0] += W * 0.5 - b[0, 0] + gap
+    return a, b

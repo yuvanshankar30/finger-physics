@@ -20,6 +20,11 @@ CAPSULE_RADIUS = 0.09  # × hand scale
 
 PINCH_ON = 0.32  # pinch distance / hand scale
 PINCH_OFF = 0.45
+# Grip = fingertips curled toward the palm (HandSim.grip_ratio: ~1.2 open).
+GRIP_ON = 0.85
+GRIP_OFF = 1.0
+CUP = 1.08  # closing hand: balls in the palm stop being pushed out by fingers
+GRIP_REACH = 0.9  # × hand scale, how far from the grip point a ball can be taken
 
 
 class World:
@@ -66,21 +71,37 @@ class World:
     def release(self, hand):
         self.grabbed[self.grabbed == hand.id] = -1
 
+    def _take_nearest(self, h, point, reach):
+        """Grab the free ball nearest `point` if it is within `reach` px."""
+        if not self.n:
+            return
+        gap = np.linalg.norm(self.pos - point, axis=1) - 0.5 * self.r
+        gap[self.grabbed >= 0] = np.inf
+        i = int(np.argmin(gap))
+        if gap[i] < reach:
+            self.grabbed[i] = h.id
+
     def update_grabs(self, hands):
-        """Pinch thumb+index (with hysteresis) to grab the nearest ball."""
+        """Pinch thumb+index, or close the whole hand, to hold a ball.
+        Open up again to let go; the ball keeps the hand's velocity (throw)."""
         for h in hands:
+            was_pinch, was_grip = h.pinching, h.gripping
             d = h.pinch_distance()
-            was = h.pinching
-            h.pinching = d < PINCH_OFF if was else d < PINCH_ON
+            h.pinching = d < PINCH_OFF if was_pinch else d < PINCH_ON
+            g = h.grip_ratio()
+            h.gripping = g < GRIP_OFF if was_grip else g < GRIP_ON
+            h.cupping = g < CUP
             h.pinch_point = (h.x[4, :2] + h.x[8, :2]) / 2
+            grip_point = h.grip_point()
+            h.hold_point = grip_point if h.gripping else h.pinch_point
+
             holding = bool(np.any(self.grabbed == h.id))
-            if h.pinching and not was and not holding and self.n:
-                gap = np.linalg.norm(self.pos - h.pinch_point, axis=1) - self.r
-                gap[self.grabbed >= 0] = np.inf
-                i = int(np.argmin(gap))
-                if gap[i] < 0.6 * h.scale:
-                    self.grabbed[i] = h.id
-            if not h.pinching and holding:
+            if not holding:
+                if h.gripping:  # sticky: closing over a ball at any time takes it
+                    self._take_nearest(h, grip_point, GRIP_REACH * h.scale)
+                elif h.pinching and not was_pinch:
+                    self._take_nearest(h, h.pinch_point, 0.6 * h.scale)
+            elif not (h.pinching or h.gripping):
                 self.release(h)
 
     def step(self, dt, hands, W, H):
@@ -95,7 +116,7 @@ class World:
         for h in hands:
             m = self.grabbed == h.id
             if m.any():  # stiff critically damped spring to the pinch point
-                vel[m] += (w * w * (h.pinch_point - pos[m]) - 2 * w * vel[m]) * dt
+                vel[m] += (w * w * (h.hold_point - pos[m]) - 2 * w * vel[m]) * dt
         speed = np.linalg.norm(vel, axis=1, keepdims=True)
         vel *= np.minimum(1.0, MAX_SPEED / np.maximum(speed, 1e-9))
         pos += vel * dt
@@ -143,6 +164,9 @@ class World:
 
     def _collide_hand(self, h):
         mask = self.grabbed != h.id
+        if h.cupping:  # let a closing hand wrap around a ball instead of batting it away
+            inside = np.linalg.norm(self.pos - h.grip_point(), axis=1) < h.scale
+            mask &= ~inside
         if not mask.any():
             return
         idx = np.nonzero(mask)[0]

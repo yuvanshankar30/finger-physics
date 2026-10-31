@@ -111,9 +111,10 @@ class Tracker(threading.Thread):
             for i, lms in enumerate(res.hand_landmarks or []):
                 pts = np.array([[p.x, p.y, p.z] for p in lms], dtype=float)
                 cats = res.handedness[i] if i < len(res.handedness) else []
-                # Frames are mirrored before detection, matching MediaPipe's
-                # selfie-view assumption, so labels are the user's real hands.
-                hands.append((pts, cats[0].category_name if cats else ""))
+                # MediaPipe's label comes out opposite to the user's real hand
+                # for our pre-mirrored frames, so swap it.
+                label = cats[0].category_name if cats else ""
+                hands.append((pts, {"Left": "Right", "Right": "Left"}.get(label, label)))
             det = Detection(hands, t_cap, t1, (t1 - t0) * 1000)
             a = 0.1
             self.infer_ms += a * (det.infer_ms - self.infer_ms)

@@ -16,7 +16,7 @@ MUTED = (168, 150, 138)
 HAND_COLORS = [(240, 200, 70), (40, 170, 255)]  # BGR: cyan, amber
 
 HELP = (
-    "[P]hysics [R]predict [L]imits [W]raw [V]ideo [H]ud  [B]alls [C]lear  "
+    "pinch or close hand to grab | [P]hysics [R]predict [L]imits [W]raw [V]ideo [H]ud [B]alls [C]lear  "
     "spring [ ]  lead - =  smooth 9 0  [Q]uit"
 )
 
@@ -84,8 +84,8 @@ def draw_scene(frame, size, hands, world, params, T, hand_timeout):
             else:
                 col = tuple(int(255 * fade) for _ in range(3))
             cv2.circle(img, _pt(x[i]), rad, col, -1, AA)
-        if h.pinching:
-            cv2.circle(img, _pt(h.pinch_point), int(cr * 1.4), (255, 255, 255), 2, AA)
+        if h.pinching or h.gripping:
+            cv2.circle(img, _pt(h.hold_point), int(cr * (1.4 if not h.gripping else 2.4)), (255, 255, 255), 2, AA)
     return img
 
 

@@ -146,3 +146,52 @@ def test_balls_settle_on_floor():
         w.step(1 / 240, [], 800, 600)
     assert np.all(w.pos[:, 1] <= 600 - w.r + 1e-6)
     assert np.abs(w.vel).max() < 200
+
+
+def _settled(points, params=None):
+    h = HandSim(params or Params(physics=False))
+    h.ingest(points, 0.0)
+    h.update_targets(0.0)
+    h.step(1 / 240)
+    return h
+
+
+def test_closing_hand_grips_ball_and_opening_throws_it():
+    w = World(seed=0)
+    open_h = open_hand()
+    fist = curl(open_hand(), 100)
+    # Close the hand fully at the MCPs too.
+    k = np.array([1.0, 0, 0])
+    for b in [5, 9, 13, 17]:
+        fist[b + 1 : b + 4] = fist[b] + rotate(fist[b + 1 : b + 4] - fist[b], k, np.radians(60))
+    h = _settled(open_h)
+    w.add(h.grip_point(), [0, 0], 22)
+    w.update_grabs([h])
+    assert h.grip_ratio() > 1.1 and w.grabbed[0] == -1  # open hand: no grab
+    h = _settled(fist)
+    h.id = 7
+    w.update_grabs([h])
+    assert h.gripping and w.grabbed[0] == 7
+    h.ingest(open_h, 0.05)
+    h.update_targets(0.05)
+    h.step(1 / 240)
+    w.update_grabs([h])
+    assert w.grabbed[0] == -1
+
+
+def test_touching_hands_trigger_effects():
+    from finger_physics.effects import Effects, hand_contacts
+
+    a = _settled(open_hand(300, 400))
+    far = _settled(open_hand(700, 400))
+    assert len(hand_contacts(a, far)[0]) == 0
+    near = _settled(open_hand(355, 400))  # fingers overlap
+    pts, _ = hand_contacts(a, near)
+    assert len(pts) > 0
+    fx = Effects(seed=0)
+    fx.update(1 / 60, [a, near], 1.0, [(255, 200, 70), (40, 170, 255)])
+    assert fx.touches == 1 and len(fx.life) > 20 and fx.rings
+    fx.update(1 / 60, [a, near], 1.02, [(255, 200, 70), (40, 170, 255)])
+    assert fx.touches == 1  # sustained contact is not a new touch
+    img = fx.draw(np.zeros((480, 640, 3), np.uint8))
+    assert img.max() > 0

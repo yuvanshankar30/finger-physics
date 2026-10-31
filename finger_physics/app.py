@@ -6,9 +6,10 @@ import cv2
 import numpy as np
 
 from .camera import Camera, SyntheticSource
+from .effects import Effects
 from .handsim import HandSim
 from .params import Params
-from .render import draw_hud, draw_scene
+from .render import HAND_COLORS, draw_hud, draw_scene
 from .tracker import Tracker
 from .world import World
 
@@ -23,6 +24,8 @@ class App:
         self.args = args
         self.params = Params()
         self.world = World()
+        self.effects = Effects()
+        self.last_log = time.perf_counter()
         self.hands = []
         self.det_seq = 0
         self.fps = 0.0
@@ -47,6 +50,13 @@ class App:
         fh, fw = frame.shape[:2]
         self.size = (int(fw * args.scale), int(fh * args.scale))
 
+        if isinstance(self.source, Camera) and not self.source.is_file:
+            cap = self.source.cap
+            print(
+                f"camera: {fw}x{fh}, driver reports {cap.get(cv2.CAP_PROP_FPS):.0f} fps "
+                f"(requested {args.width}x{args.height} @ {args.fps})",
+                flush=True,
+            )
         self.tracker = Tracker(self.source, args.hands, use_gpu=not args.cpu)
         self.tracker.start()
 
@@ -103,9 +113,11 @@ class App:
             steps += 1
         if steps == MAX_SUBSTEPS:
             acc = 0.0
+        self.effects.update(dt, self.hands, T, HAND_COLORS)
 
         frame = self.source.latest()[0]  # newest frame, not the detected one
         img = draw_scene(frame, self.size, self.hands, self.world, self.params, T, HAND_TIMEOUT)
+        img = self.effects.draw(img)
         stats = {
             "cam_fps": self.source.fps,
             "infer_ms": self.tracker.infer_ms,
@@ -114,6 +126,14 @@ class App:
             "physics_hz": 1 / SUBSTEP,
             "backend": self.tracker.backend,
         }
+        if not self.args.selftest and T - self.last_log > 10:
+            self.last_log = T
+            print(
+                f"cam {stats['cam_fps']:.0f} fps | infer {stats['infer_ms']:.1f} ms ({stats['backend']}) | "
+                f"cam->pose {stats['latency_ms']:.0f} ms | render {stats['fps']:.0f} fps | "
+                f"hands {len(self.hands)} | touches {self.effects.touches}",
+                flush=True,
+            )
         return draw_hud(img, stats, self.hands, self.params), acc
 
     def handle_key(self, key):
@@ -174,7 +194,7 @@ class App:
     def run_selftest(self):
         """Headless: run the real model on blank frames, plus a synthetic hand
         fed straight into the physics, then save a screenshot."""
-        from .selftest import synthetic_hand
+        from .selftest import synthetic_pair
 
         t_end = time.perf_counter() + self.args.selftest
         last = time.perf_counter()
@@ -191,10 +211,10 @@ class App:
                 self.fps += 0.05 * (1 / dt - self.fps)
             if now >= next_fake:  # 30 Hz fake "detections"
                 next_fake = now + 1 / 30
-                pts = synthetic_hand(now, self.size)
-                if not self.hands:
+                while len(self.hands) < 2:
                     self.hands.append(HandSim(self.params))
-                self.hands[0].ingest(pts, now, "Right")
+                for h, pts, lab in zip(self.hands, synthetic_pair(now, self.size), ("Left", "Right")):
+                    h.ingest(pts, now, lab)
             t0 = time.perf_counter()
             img, acc = self.tick(now, dt, acc)
             render_ms.append((time.perf_counter() - t0) * 1000)
@@ -209,7 +229,7 @@ class App:
             f"tick {np.mean(render_ms):.2f} ms avg / {np.percentile(render_ms, 95):.2f} ms p95, "
             f"model infer {self.tracker.infer_ms:.1f} ms on {self.tracker.backend}, "
             f"detections {self.det_seq}, flex_sign {h.flex_sign if h else None}, "
-            f"balls {self.world.n}" + (f", screenshot {out}" if out else "")
+            f"balls {self.world.n}, touches {self.effects.touches}" + (f", screenshot {out}" if out else "")
         )
         self.close()
 

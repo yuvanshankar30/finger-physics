@@ -125,7 +125,10 @@ class HandSim:
         self.flex_sign = 0
         self.label = ""
         self.pinching = False
+        self.gripping = False
+        self.cupping = False
         self.pinch_point = np.zeros(2)
+        self.hold_point = np.zeros(2)
         self.id = HandSim._next_id
         HandSim._next_id += 1
 
@@ -264,6 +267,17 @@ class HandSim:
             signed = signed_angle(u, w, self.lateral_axis(x)) * self.flex_sign
             out[J_LIMITED] = np.degrees(signed[J_LIMITED])
         return out
+
+    def grip_ratio(self):
+        """Mean fingertip distance from the palm centre, in hand-scale units.
+        About 1.2 with the hand open, under 0.8 when it is closed."""
+        c = self.x[[0, 5, 9, 13, 17]].mean(axis=0)
+        return float(np.linalg.norm(self.x[[8, 12, 16, 20]] - c, axis=1).mean() / self.scale)
+
+    def grip_point(self):
+        """Where a gripped ball sits: palm centre, shifted toward the knuckles."""
+        c = self.x[[0, 5, 9, 13, 17], :2].mean(axis=0)
+        return 0.4 * c + 0.6 * self.x[[5, 9, 13, 17], :2].mean(axis=0)
 
     def pinch_distance(self):
         """Thumb-tip to index-tip distance in units of hand scale."""
