@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finger Physics</title>
+    <meta name="description" content="Real-time camera finger-joint tracking with a physically simulated hand skeleton and latency prediction." />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+
+    <section id="stats" class="panel">
+      <div><b id="s-cam">–</b><span>cam fps</span></div>
+      <div><b id="s-infer">–</b><span>infer ms</span></div>
+      <div><b id="s-lat">–</b><span>cam→pose ms</span></div>
+      <div><b id="s-fps">–</b><span>render fps</span></div>
+      <div><b id="s-hz">–</b><span>physics Hz</span></div>
+      <div><b id="s-backend">–</b><span>backend</span></div>
+    </section>
+
+    <section id="angles" class="panel"></section>
+
+    <section id="controls" class="panel">
+      <div class="toggles">
+        <label><input type="checkbox" id="physics" /> Physics</label>
+        <label><input type="checkbox" id="prediction" /> Prediction</label>
+        <label><input type="checkbox" id="jointLimits" /> Joint limits</label>
+        <label><input type="checkbox" id="showRaw" /> Raw points</label>
+        <label><input type="checkbox" id="showVideo" /> Video</label>
+      </div>
+      <label class="range">Spring <input type="range" id="stiffness" min="4" max="40" step="1" /><output id="stiffness-v"></output></label>
+      <label class="range">Lead <input type="range" id="lead" min="0" max="60" step="1" /><output id="lead-v"></output></label>
+      <label class="range">Smoothing <input type="range" id="smoothing" min="0.3" max="6" step="0.1" /><output id="smoothing-v"></output></label>
+      <label class="range">Speed β <input type="range" id="beta" min="0" max="0.05" step="0.001" /><output id="beta-v"></output></label>
+      <div class="buttons">
+        <button id="spawn">Spawn balls <kbd>B</kbd></button>
+        <button id="clear">Clear <kbd>C</kbd></button>
+      </div>
+    </section>
+
+    <button id="toggle-panel" title="Toggle panels (H)">☰</button>
+
+    <div id="overlay">
+      <div class="card">
+        <h1>Finger Physics</h1>
+        <p>Tracks all 21 hand joints from your camera, then runs them through a 240&nbsp;Hz physics skeleton with bone-length and joint-limit constraints plus latency prediction.</p>
+        <p class="muted">Pinch thumb + index to grab a ball. Everything runs locally in your browser; no video leaves your device.</p>
+        <button id="start">Start camera</button>
+        <p id="status" class="muted">Loading…</p>
+      </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>

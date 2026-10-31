@@ -1,0 +1,11 @@
+{
+  "name": "finger-physics",
+  "version": "0.1.0",
+  "description": "Real-time camera finger-joint tracking with a physically simulated hand skeleton and latency prediction.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "npx --yes serve@14.2.4 -l 5180 .",
+    "test": "node --test test/*.test.js"
+  }
+}
