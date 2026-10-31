@@ -100,7 +100,3 @@ tests/          pytest unit tests for filters, physics, and world
 ```sh
 pip install -e ".[dev]" && pytest
 ```
-
-## License
-
-MIT
